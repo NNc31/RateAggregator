@@ -2,10 +2,12 @@ package ua.j2ee.nefodov.rateaggregator.controller;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.context.request.WebRequest;
@@ -60,7 +62,7 @@ public class AggregatorExceptionHandler extends ResponseEntityExceptionHandler {
         }
     }
 
-    @ExceptionHandler(value = {IllegalStateException.class, InterruptedException.class})
+    @ExceptionHandler(value = {InterruptedException.class})
     protected ResponseEntity<ErrorResponse> handleConflict(Exception e, WebRequest request) {
         logger.warn(e.getClass().getName() + ". Message: " + e.getMessage());
         HttpHeaders headers = new HttpHeaders();
@@ -73,14 +75,37 @@ public class AggregatorExceptionHandler extends ResponseEntityExceptionHandler {
 
     @Override
     protected ResponseEntity<Object> handleAsyncRequestTimeoutException(AsyncRequestTimeoutException ex,
-                                                                        HttpHeaders headers,
-                                                                        HttpStatus status,
+                                                                        HttpHeaders headers, HttpStatus status,
                                                                         WebRequest webRequest) {
         logger.warn("Connection timeout");
         if (webRequest.getParameter("xml") != null) headers.setContentType(MediaType.APPLICATION_XML);
         else headers.setContentType(MediaType.APPLICATION_JSON);
 
         return new ResponseEntity<>(new ErrorResponse("Connection timeout"),
+                headers, HttpStatus.REQUEST_TIMEOUT);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleMissingServletRequestParameter(MissingServletRequestParameterException ex,
+                                                                          HttpHeaders headers, HttpStatus status,
+                                                                          WebRequest request) {
+        logger.warn("Missing request parameter");
+        if (request.getParameter("xml") != null) headers.setContentType(MediaType.APPLICATION_XML);
+        else headers.setContentType(MediaType.APPLICATION_JSON);
+
+        return new ResponseEntity<>(new ErrorResponse("Missing request parameter: " + ex.getParameterName()),
+                headers, HttpStatus.REQUEST_TIMEOUT);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex, HttpHeaders headers,
+                                                        HttpStatus status, WebRequest request) {
+        logger.warn("Incorrect type of parameters");
+        if (request.getParameter("xml") != null) headers.setContentType(MediaType.APPLICATION_XML);
+        else headers.setContentType(MediaType.APPLICATION_JSON);
+
+        return new ResponseEntity<>(new ErrorResponse("Incorrect type of parameters. Date format - YYYY-MM-DD, " +
+                "currency - iso 4217 code"),
                 headers, HttpStatus.REQUEST_TIMEOUT);
     }
 

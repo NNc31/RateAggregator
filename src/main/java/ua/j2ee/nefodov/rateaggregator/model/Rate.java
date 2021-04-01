@@ -1,13 +1,25 @@
 package ua.j2ee.nefodov.rateaggregator.model;
 
-import java.util.Currency;
-
-public class CommonDto {
+public class Rate {
     private String service;
     private String date;
     private String currency;
     private double sellRate;
     private double purchaseRate;
+
+    public Rate(String service, String date, String currency) {
+        this.service = service;
+        this.date = date;
+        this.currency = currency;
+    }
+
+    public Rate(String service, String date, String currency, double sellRate, double purchaseRate) {
+        this.service = service;
+        this.date = date;
+        this.currency = currency;
+        this.sellRate = sellRate;
+        this.purchaseRate = purchaseRate;
+    }
 
     public String getService() {
         return service;
@@ -47,14 +59,5 @@ public class CommonDto {
 
     public void setPurchaseRate(double purchaseRate) {
         this.purchaseRate = purchaseRate;
-    }
-
-    public static boolean validateCurrency(String currCode) {
-        try {
-            Currency.getInstance(currCode);
-            return true;
-        } catch (IllegalArgumentException e) {
-            return false;
-        }
     }
 }

@@ -7,48 +7,81 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.AsyncResult;
 import org.springframework.stereotype.Service;
-import ua.j2ee.nefodov.rateaggregator.model.CommonDto;
-import ua.j2ee.nefodov.rateaggregator.model.DateParser;
 import ua.j2ee.nefodov.rateaggregator.model.MonoDto;
+import ua.j2ee.nefodov.rateaggregator.model.Rate;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Currency;
 import java.util.concurrent.Future;
-
 
 @Service
 public class MonoService implements RateService {
 
     private static final Logger logger = LoggerFactory.getLogger(MonoService.class);
 
+    private static final String STRING_URL = "https://api.monobank.ua/bank/currency";
+
     private MonoDto monoDto = null;
 
+    @Async
     @Override
-    public String getName() {
-        return "MonoBank";
+    public Future<Rate> getRate(LocalDate date, Currency currency) {
+        Rate rate = new Rate("MonoBank",
+                date.format(DateTimeFormatter.ISO_DATE), currency.getCurrencyCode());
+
+        if (!date.equals(LocalDate.now()) || !setMonoDto()) {
+            rate.setSellRate(0);
+            rate.setPurchaseRate(0);
+        } else {
+            JSONObject data = monoDto.getJsonObject(currency.getCurrencyCode());
+            if (data == null) {
+                logger.warn("No data for currency " + currency.getCurrencyCode());
+                rate.setSellRate(0);
+                rate.setPurchaseRate(0);
+            } else {
+                if (data.has("rateSell")) {
+                    rate.setSellRate(data.getDouble("rateSell"));
+                } else if (data.has("rateCross")) {
+                    rate.setSellRate(data.getDouble("rateCross"));
+                } else {
+                    logger.warn("No sell rate from MonoBank for currency " + currency.getCurrencyCode());
+                    rate.setSellRate(0);
+                }
+
+                if (data.has("rateBuy")) {
+                    rate.setPurchaseRate(data.getDouble("rateBuy"));
+                } else if (data.has("rateCross")) {
+                    rate.setPurchaseRate(data.getDouble("rateCross"));
+                } else {
+                    logger.warn("No buy rate from MonoBank for currency " + currency.getCurrencyCode());
+                    rate.setPurchaseRate(0);
+                }
+            }
+        }
+
+        return new AsyncResult<>(rate);
     }
 
     @Async
-    public Future<CommonDto> getCommonDto(String date, String currCode) {
-        CommonDto commonDto = new CommonDto();
-        commonDto.setDate(date);
-        commonDto.setCurrency(currCode);
+    public Future<Rate> getBestRateOnPeriod(LocalDate start, LocalDate end, Currency currency) {
+        throw new UnsupportedOperationException();
+    }
 
-        if (!DateParser.nowCommonFormat().equals(date)) {
-            return new AsyncResult<>(null);
-        }
-
+    private boolean setMonoDto() {
         if (monoDto == null) {
-            monoDto = new MonoDto();
+
             URL url;
             try {
-                url = new URL("https://api.monobank.ua/bank/currency");
+                url = new URL(STRING_URL);
             } catch (MalformedURLException e) {
-                logger.warn("Malformed URL exception in MonoBank");
-                throw new RuntimeException("Unexpected response from MonoBank");
+                logger.warn("MonoBank is unavailable");
+                return false;
             }
 
             StringBuilder builder = new StringBuilder();
@@ -58,38 +91,14 @@ public class MonoService implements RateService {
                     builder.append(inputStr);
                 }
             } catch (IOException e) {
-                logger.warn("IOException while reading response from MonoBank URL");
-                throw new IllegalStateException("Unexpected response from MonoBank");
+                logger.warn("IOException in response from MonoBank");
+                return false;
             }
 
+            monoDto = new MonoDto();
             monoDto.setJsonArray(new JSONArray(builder.toString()));
         }
 
-        JSONObject data = monoDto.getJsonObject(currCode);
-        if (data == null) {
-            logger.info("Data is null for currency " + currCode);
-            throw new IllegalArgumentException("Invalid currency code");
-        }
-
-        commonDto.setService(getName());
-        if (data.has("rateSell")) {
-            commonDto.setSellRate(data.getDouble("rateSell"));
-        } else if (data.has("rateCross")) {
-            commonDto.setSellRate(data.getDouble("rateCross"));
-        } else {
-            logger.info("Unexpected response from MonoBank for currency " + currCode);
-            throw new IllegalStateException("Unexpected response from MonoBank");
-        }
-
-        if (data.has("rateBuy")) {
-            commonDto.setPurchaseRate(data.getDouble("rateBuy"));
-        } else if (data.has("rateCross")) {
-            commonDto.setPurchaseRate(data.getDouble("rateCross"));
-        } else {
-            logger.info("Unexpected response from MonoBank for currency " + currCode);
-            throw new IllegalStateException("Unexpected response from MonoBank");
-        }
-
-        return new AsyncResult<>(commonDto);
+        return true;
     }
 }

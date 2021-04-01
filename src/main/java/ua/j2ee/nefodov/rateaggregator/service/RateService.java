@@ -1,14 +1,17 @@
 package ua.j2ee.nefodov.rateaggregator.service;
 
 import org.springframework.scheduling.annotation.Async;
-import ua.j2ee.nefodov.rateaggregator.model.CommonDto;
+import ua.j2ee.nefodov.rateaggregator.model.Rate;
 
+import java.time.LocalDate;
+import java.util.Currency;
 import java.util.concurrent.Future;
 
 public interface RateService {
 
-    String getName();
+    @Async
+    Future<Rate> getRate(LocalDate date, Currency currency);
 
     @Async
-    Future<CommonDto> getCommonDto(String date, String currCode);
+    Future<Rate> getBestRateOnPeriod(LocalDate start, LocalDate end, Currency currency);
 }
